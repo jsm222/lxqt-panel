@@ -1,8 +1,26 @@
 set(PLUGIN "sysstat")
 
-find_package(SysStat-Qt5 REQUIRED)
+if(SYSSTAT_PLUGIN_USE_STATGRAB)
+    find_library(STATGRAB_LIB statgrab)
+    set(HEADERS
+        lxqtstatgrabbase.h
+        lxqtstatgrabcpu.h
+        lxqtstatgrabmem.h
+        lxqtstatgrabnet.h
+)
+    set(SOURCES
+        lxqtstatgrabbase.cpp
+        lxqtstatgrabcpu.cpp
+        lxqtstatgrabmem.cpp
+        lxqtstatgrabnet.cpp
+)
+elseif(SYSSTAT_PLUGIN_USE_LIBSYSSTAT)
+    find_package(SysStat-Qt5 REQUIRED)
+    add_definitions("-DUSE_LIBSYSSTAT=1")
+endif()
 
 set(HEADERS
+    ${HEADERS}
     lxqtsysstat.h
     lxqtsysstatconfiguration.h
     lxqtsysstatcolours.h
@@ -10,6 +28,7 @@ set(HEADERS
 )
 
 set(SOURCES
+    ${SOURCES}
     lxqtsysstat.cpp
     lxqtsysstatconfiguration.cpp
     lxqtsysstatcolours.cpp
@@ -21,6 +40,10 @@ set(UIS
     lxqtsysstatcolours.ui
 )
 
-set(LIBRARIES sysstat-qt5)
+if(SYSSTAT_PLUGIN_USE_STATGRAB)
+    set(LIBRARIES ${STATGRAB_LIB})
+elseif(SYSSTAT_PLUGIN_USE_LIBSYSSTAT )
+   set(LIBRARIES sysstat-qt5)
+endif()
 
 BUILD_LXQT_PLUGIN(${PLUGIN})

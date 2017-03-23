@@ -28,10 +28,15 @@
 #include "lxqtsysstat.h"
 #include "lxqtsysstatutils.h"
 
+#ifdef USE_LIBSYSSTAT
 #include <SysStat/CpuStat>
 #include <SysStat/MemStat>
 #include <SysStat/NetStat>
-
+#else
+#include "lxqtstatgrabcpu.h"
+#include "lxqtstatgrabnet.h"
+#include "lxqtstatgrabmem.h"
+#endif
 #include <QTimer>
 #include <qmath.h>
 #include <QPainter>
@@ -115,13 +120,18 @@ bool LXQtSysStatTitle::event(QEvent *e)
 LXQtSysStatContent::LXQtSysStatContent(ILXQtPanelPlugin *plugin, QWidget *parent):
     QWidget(parent),
     mPlugin(plugin),
+#ifdef USE_LIBSYSSTAT
     mStat(NULL),
+#endif
     mUpdateInterval(0),
     mMinimalSize(0),
     mTitleFontPixelHeight(0),
     mUseThemeColours(true),
     mHistoryOffset(0)
 {
+#ifndef USE_LIBSYSSTAT
+        mStat=nullptr;
+#endif
     setObjectName("SysStat_Graph");
 }
 
@@ -305,19 +315,27 @@ void LXQtSysStatContent::updateSettings(const PluginSettings *settings)
             mStat->deleteLater();
             mStat = nullptr;
         }
-
+#ifdef USE_LIBSYSSTAT
         if (mDataType == "CPU")
             mStat = new SysStat::CpuStat(this);
         else if (mDataType == "Memory")
             mStat = new SysStat::MemStat(this);
         else if (mDataType == "Network")
             mStat = new SysStat::NetStat(this);
-    }
-
+#else
+        if (mDataType == "CPU")
+            mStat = new LXQtStatGrabCpu(this);
+        else if (mDataType == "Memory")
+            mStat = new LXQtStatGrabMem(this);
+        else if (mDataType == "Network")
+            mStat = new LXQtStatGrabNet(this);
+#endif
+   }
     if (mStat)
     {
         if (needReconnecting)
         {
+#ifdef USE_LIBSYSSTAT
             if (mDataType == "CPU")
             {
                 if (mUseFrequency)
@@ -342,6 +360,26 @@ void LXQtSysStatContent::updateSettings(const PluginSettings *settings)
             {
                 connect(qobject_cast<SysStat::NetStat*>(mStat), SIGNAL(update(unsigned, unsigned)), this, SLOT(networkUpdate(unsigned, unsigned)));
             }
+#else
+
+            if (mDataType == "CPU")
+            {
+
+                connect(qobject_cast<LXQtStatGrabCpu*>(mStat), SIGNAL(update(float, float, float, float)), this, SLOT(cpuUpdate(float, float, float, float)));
+
+            }
+            else if (mDataType == "Memory")
+            {
+                if (mDataSource == "memory")
+                    connect(qobject_cast<LXQtStatGrabMem*>(mStat), SIGNAL(update(float, float, float)), this, SLOT(memoryUpdate(float, float, float)));
+                else
+                    connect(qobject_cast<LXQtStatGrabMem*>(mStat), SIGNAL(swapUpdate(float)), this, SLOT(swapUpdate(float)));
+            }
+            else if (mDataType == "Network")
+            {
+                connect(qobject_cast<LXQtStatGrabNet*>(mStat), SIGNAL(update(unsigned long long, unsigned long long)), this, SLOT(networkUpdate(unsigned long long, unsigned long long)));
+            }
+#endif
 
             mStat->setMonitoredSource(mDataSource);
         }
@@ -438,10 +476,15 @@ void LXQtSysStatContent::cpuUpdate(float user, float nice, float system, float o
 
 void LXQtSysStatContent::cpuUpdate(float user, float nice, float system, float other)
 {
-    int y_system = static_cast<int>(system * 100.0);
-    int y_user   = static_cast<int>(user   * 100.0);
-    int y_nice   = static_cast<int>(nice   * 100.0);
-    int y_other  = static_cast<int>(other  * 100.0);
+#ifdef USE_LIBSYSSTAT
+float fac=100.0;
+#else
+float fac=1.0;
+#endif
+    int y_system = static_cast<int>(system * fac);
+    int y_user   = static_cast<int>(user * fac);
+    int y_nice   = static_cast<int>(nice * fac);
+    int y_other  = static_cast<int>(other * fac);
 
     toolTipInfo(tr("system: %1%<br>user: %2%<br>nice: %3%<br>other: %4%<br>freq: n/a", "CPU tooltip information")
             .arg(y_system).arg(y_user).arg(y_nice).arg(y_other));
@@ -486,8 +529,11 @@ void LXQtSysStatContent::memoryUpdate(float apps, float buffers, float cached)
     int y_cached  = static_cast<int>(cached  * 100.0);
 
     toolTipInfo(tr("apps: %1%<br>buffers: %2%<br>cached: %3%", "Memory tooltip information")
+#ifdef USE_LIBSYSSTAT
         .arg(y_apps).arg(y_buffers).arg(y_cached));
-
+#else
+        .arg(y_apps).arg("n/a").arg(y_cached));
+#endif
     y_apps    = clamp(y_apps, 0, 99);
     y_buffers = clamp(y_buffers + y_apps, 0, 99);
     y_cached  = clamp(y_cached + y_buffers, 0, 99);
@@ -536,7 +582,11 @@ void LXQtSysStatContent::swapUpdate(float used)
     update(0, mTitleFontPixelHeight, width(), height() - mTitleFontPixelHeight);
 }
 
+#ifdef USE_LIBSYSSTAT
 void LXQtSysStatContent::networkUpdate(unsigned received, unsigned transmitted)
+#else
+void LXQtSysStatContent::networkUpdate(unsigned long long received, unsigned long long transmitted)
+#endif
 {
     qreal min_value = qMin(qMax(static_cast<qreal>(qMin(received, transmitted)) / mNetRealMaximumSpeed, static_cast<qreal>(0.0)), static_cast<qreal>(1.0));
     qreal max_value = qMin(qMax(static_cast<qreal>(qMax(received, transmitted)) / mNetRealMaximumSpeed, static_cast<qreal>(0.0)), static_cast<qreal>(1.0));

@@ -27,7 +27,9 @@
 
 #ifndef LXQTPANELSYSSTAT_H
 #define LXQTPANELSYSSTAT_H
-
+#ifndef USE_LIBSYSSTAT
+#include "lxqtstatgrabbase.h"
+#endif
 #include "../panel/ilxqtpanelplugin.h"
 #include "lxqtsysstatconfiguration.h"
 
@@ -37,10 +39,11 @@
 class LXQtSysStatTitle;
 class LXQtSysStatContent;
 class LXQtPanel;
-
+#ifdef USE_LIBSYSSTAT
 namespace SysStat {
     class BaseStat;
 }
+#endif
 
 class LXQtSysStat : public QObject, public ILXQtPanelPlugin
 {
@@ -141,16 +144,22 @@ protected slots:
     void cpuUpdate(float user, float nice, float system, float other);
     void memoryUpdate(float apps, float buffers, float cached);
     void swapUpdate(float used);
+#ifdef USE_LIBSYSSTAT
     void networkUpdate(unsigned received, unsigned transmitted);
-
+#else
+    void networkUpdate(unsigned long long received, unsigned long long transmitted);
+#endif
 private:
     void toolTipInfo(QString const & tooltip);
 
 private:
     ILXQtPanelPlugin *mPlugin;
 
-    SysStat::BaseStat *mStat;
-
+#ifdef USE_LIBSYSSTAT
+     SysStat::BaseStat *mStat;
+#else
+     LXQtStatGrabBase  *mStat;
+#endif
     typedef struct ColourPalette
     {
         QColor gridColour;

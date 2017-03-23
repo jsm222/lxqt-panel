@@ -31,10 +31,11 @@
 #include "lxqtsysstatutils.h"
 #include "lxqtsysstatcolours.h"
 
+#ifdef USE_LIBSYSSTAT
 #include <SysStat/CpuStat>
 #include <SysStat/MemStat>
 #include <SysStat/NetStat>
-
+#endif
 //Note: strings can't actually be translated here (in static initialization time)
 //      the QT_TR_NOOP here is just for qt translate tools to get the strings for translation
 const QStringList LXQtSysStatConfiguration::msStatTypes = {
@@ -85,9 +86,14 @@ namespace
 LXQtSysStatConfiguration::LXQtSysStatConfiguration(PluginSettings *settings, QWidget *parent) :
     LXQtPanelPluginConfigDialog(settings, parent),
     ui(new Ui::LXQtSysStatConfiguration),
+#ifdef USE_LIBSYSSTAT
     mStat(NULL),
+#endif
     mColoursDialog(NULL)
 {
+#ifndef USE_LIBSYSSTAT
+    mStat = nullptr;
+#endif
     setAttribute(Qt::WA_DeleteOnClose);
     setObjectName("SysStatConfigurationWindow");
     ui->setupUi(this);
@@ -103,7 +109,11 @@ LXQtSysStatConfiguration::LXQtSysStatConfiguration(PluginSettings *settings, QWi
     connect(ui->sizeSB, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &LXQtSysStatConfiguration::saveSettings);
     connect(ui->linesSB, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &LXQtSysStatConfiguration::saveSettings);
     connect(ui->titleLE, &QLineEdit::editingFinished, this, &LXQtSysStatConfiguration::saveSettings);
+#ifdef USE_LIBSYSSTAT
     connect(ui->useFrequencyCB, &QCheckBox::toggled, this, &LXQtSysStatConfiguration::saveSettings);
+#else
+    ui->useFrequencyCB->setEnabled(false);
+#endif
     connect(ui->maximumHS, &QSlider::valueChanged, this, &LXQtSysStatConfiguration::saveSettings);
     connect(ui->logarithmicCB, &QCheckBox::toggled, this, &LXQtSysStatConfiguration::saveSettings);
     connect(ui->sourceCOB, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, &LXQtSysStatConfiguration::saveSettings);
@@ -171,6 +181,7 @@ void LXQtSysStatConfiguration::on_typeCOB_currentIndexChanged(int index)
 {
     if (mStat)
         mStat->deleteLater();
+#ifdef USE_LIBSYSSTAT
     switch (index)
     {
     case 0:
@@ -185,7 +196,22 @@ void LXQtSysStatConfiguration::on_typeCOB_currentIndexChanged(int index)
         mStat = new SysStat::NetStat(this);
         break;
     }
+#else
+    switch (index)
+    {
+    case 0:
+        mStat = new LXQtStatGrabCpu(this);
+        break;
 
+    case 1:
+        mStat = new LXQtStatGrabMem(this);
+        break;
+
+    case 2:
+        mStat = new LXQtStatGrabNet(this);
+        break;
+    }
+#endif
     ui->sourceCOB->blockSignals(true);
     ui->sourceCOB->clear();
     for (auto const & s : mStat->sources())

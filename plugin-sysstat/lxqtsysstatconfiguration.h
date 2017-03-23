@@ -33,15 +33,19 @@
 #include "../panel/pluginsettings.h"
 #include <QAbstractButton>
 #include <QMap>
-
+#ifndef USE_LIBSYSSTAT
+#include "lxqtstatgrabcpu.h"
+#include "lxqtstatgrabmem.h"
+#include "lxqtstatgrabnet.h"
+#endif
 namespace Ui {
     class LXQtSysStatConfiguration;
 }
-
+#ifdef USE_LIBSYSSTAT
 namespace SysStat {
     class BaseStat;
 }
-
+#endif
 class LXQtSysStatColours;
 
 class LXQtSysStatConfiguration : public LXQtPanelPluginConfigDialog
@@ -69,8 +73,12 @@ signals:
 
 private:
     Ui::LXQtSysStatConfiguration *ui;
-
+#ifdef USE_LIBSYSSTAT
     SysStat::BaseStat *mStat;
+#else
+    LXQtStatGrabBase *mStat;
+#endif
+
     LXQtSysStatColours *mColoursDialog;
 
     void loadSettings();
